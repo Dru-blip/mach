@@ -2,20 +2,6 @@
 
 Thank you for your interest in contributing to Mach!
 
-- [Contributing to Mach](#contributing-to-mach)
-  - [Code of Conduct](#code-of-conduct)
-  - [Getting Started](#getting-started)
-    - [Prerequisites](#prerequisites)
-    - [Building](#building)
-  - [Branch Workflow](#branch-workflow)
-    - [Contributing Changes](#contributing-changes)
-  - [Reporting Issues](#reporting-issues)
-  - [Coding Standards](#coding-standards)
-    - [C Code (Bootstrap Compiler in `boot/`)](#c-code-bootstrap-compiler-in-boot)
-    - [Mach Code (in `src/` and `std/`)](#mach-code-in-src-and-std)
-  - [Project Structure](#project-structure)
-  - [License](#license)
-
 ---
 
 ## Code of Conduct
@@ -28,26 +14,47 @@ Be respectful, constructive, and professional. Treat Mach like a passion project
 
 ### Prerequisites
 - C compiler: `clang` with C23 support
-- LLVM 19+ with development headers
 - GNU Make
 - Git
 
 ### Building
 
+Mach uses a three-stage bootstrap build chain:
+
+1. **cmach** — Bootstrap compiler written in C (`boot/`)
+2. **imach** — Intermediate compiler: Mach source compiled by cmach
+3. **mach** — Final compiler: Mach source compiled by imach (self-hosting)
+
 ```bash
-git clone https://github.com/octalide/mach.git
+git clone --recurse-submodules https://github.com/octalide/mach.git
 cd mach
-make full
+make cmach    # build the C bootstrap compiler
+make imach    # build the intermediate compiler
+make mach     # build the self-hosting compiler
+```
+
+To run the test suite:
+
+```bash
+make test     # runs unit tests via cmach
 ```
 
 ---
 
-## Branch Workflow
+## Branching Strategy
 
 We use a two-branch model:
 
-- **`main`** - Stable branch. Production-ready code only.
-- **`dev`** - Development branch. Integration point for features.
+- **`main`** — Stable branch. Tagged releases only.
+- **`dev`** — Development branch. Integration point for features and fixes.
+
+All work happens on feature branches off `dev`. When `dev` reaches a stable milestone, it is merged into `main` and tagged.
+
+### Branch Naming
+
+- `feat/<name>` — New features
+- `fix/<name>` — Bug fixes
+- `doc/<name>` — Documentation changes
 
 ### Contributing Changes
 
@@ -62,7 +69,7 @@ We use a two-branch model:
 4. **Commit with clear messages:**
    ```
    component: brief description
-   
+
    Longer explanation if needed.
    ```
 5. **Push to your fork:**
@@ -75,8 +82,26 @@ We use a two-branch model:
 - Target `dev` branch (not `main`)
 - Provide clear description of changes
 - Link related issues
-- Ensure code builds and works
+- Ensure code builds with `make cmach imach`
 - Follow coding standards
+
+## Versioning
+
+Mach uses [Semantic Versioning](https://semver.org/) (`vMAJOR.MINOR.PATCH`):
+
+- **MAJOR** — Breaking changes to the language or standard library
+- **MINOR** — New features, backward-compatible additions
+- **PATCH** — Bug fixes, documentation, internal improvements
+
+Tags are created on `main` after merging from `dev`. The current pre-1.0 convention treats minor bumps as potentially breaking while the language stabilizes.
+
+### Release Flow
+
+```
+dev (ongoing work)
+ └─► merge to main
+      └─► tag vX.Y.Z on main
+```
 
 ---
 
@@ -120,9 +145,9 @@ ast_node_init(&node);
 ast_node_dnit(&node);
 ```
 
-### Mach Code (in `src/` and `std/`)
+### Mach Code (in `src/` and `dep/mach-std/`)
 
-Mach coding standards are in flux while syntax stabalizes and the userbase grows. Follow existing patterns and refer to the [language specification](doc/language-spec.md) for language features.
+Mach coding standards are in flux while syntax stabilizes and the userbase grows. Follow existing patterns and refer to the [language specification](doc/language-spec.md) for language features.
 
 ---
 
@@ -130,13 +155,16 @@ Mach coding standards are in flux while syntax stabalizes and the userbase grows
 
 ```
 mach/
-├── boot/              # bootstrap C compiler
+├── boot/              # bootstrap C compiler (stage 1)
+├── dep/
+│   └── mach-std/      # standard library (git submodule)
 ├── doc/               # documentation
-├── src/               # mach compiler (written in mach)
-├── std/               # standard library
+├── src/               # self-hosting mach compiler (stages 2 & 3)
 ├── Makefile           # build system
 └── mach.toml          # project configuration
 ```
+
+The standard library lives in a separate repository ([mach-std](https://github.com/octalide/mach-std)) and is included as a git submodule under `dep/mach-std/`.
 
 ---
 

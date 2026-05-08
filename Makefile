@@ -6,19 +6,15 @@
 #
 # directory structure:
 #   out/
-#     bin/         # final binaries (cmach, imach, mach)
+#     bin/         # final binaries (cmach, imach)
 #     cmach/       # cmach artifacts (obj/)
 #     imach/<target>/  # imach artifacts (ast/, ir/, asm/, obj/)
 #     mach/<target>/   # mach artifacts (ast/, ir/, asm/, obj/)
 
 # compiler and flags
 CC := clang
-CFLAGS := -std=c23 -Wall -Wextra -Werror -pedantic -O2
-CFLAGS_DEBUG := -std=c23 -Wall -Wextra -Werror -pedantic -g -O0 -DDEBUG
-
-# llvm configuration
-LLVM_CFLAGS := $(shell llvm-config --cflags)
-LLVM_LDFLAGS := $(shell llvm-config --ldflags --libs core)
+CFLAGS := -std=c23 -D_POSIX_C_SOURCE=200809L -Wall -Wextra -Werror -pedantic -O2
+CFLAGS_DEBUG := -std=c23 -D_POSIX_C_SOURCE=200809L -Wall -Wextra -Werror -pedantic -g -O0 -DDEBUG
 
 OUT_DIR := out
 BIN_DIR := $(OUT_DIR)/bin
@@ -29,20 +25,22 @@ MACH_SRC_DIR := src
 
 # bootstrap compiler
 BOOT_DIR := boot
+BOOT_SRC_DIR := $(BOOT_DIR)/src
+BOOT_INC_DIR := $(BOOT_DIR)/include
 CMACH_OBJ_DIR := $(OUT_DIR)/cmach/obj
 
 # final executables
 CMACH := $(BIN_DIR)/cmach
 IMACH := $(BIN_DIR)/imach
-MACH := $(BIN_DIR)/mach
+MACH := $(OUT_DIR)/linux/bin/mach
 
 # bootstrap compiler sources
-BOOT_SOURCES := $(wildcard $(BOOT_DIR)/*.c)
-BOOT_OBJECTS := $(BOOT_SOURCES:$(BOOT_DIR)/%.c=$(CMACH_OBJ_DIR)/%.o)
-BOOT_HEADERS := $(wildcard $(BOOT_DIR)/*.h)
+BOOT_SOURCES := $(shell find $(BOOT_SRC_DIR) -type f -name '*.c')
+BOOT_OBJECTS := $(BOOT_SOURCES:$(BOOT_SRC_DIR)/%.c=$(CMACH_OBJ_DIR)/%.o)
+BOOT_HEADERS := $(shell find $(BOOT_INC_DIR) -type f -name '*.h')
 
 # main targets
-.PHONY: help cmach-clean cmach-build cmach imach-clean imach-build imach mach-clean mach-build mach full clean
+.PHONY: help cmach-clean cmach-build cmach imach-clean imach-build imach mach-clean mach-build mach full clean test
 
 # default target: print help
 .DEFAULT_GOAL := help
@@ -63,10 +61,11 @@ help:
 	@echo "final (compiled with imach):"
 	@echo "  mach-clean   - clean mach build artifacts"
 	@echo "  mach-build   - build mach"
-	@echo "  mach         - clean and build mach"
+	@echo "  mach         - clean and build mach (output per mach.toml)"
 	@echo ""
 	@echo "meta:"
 	@echo "  clean        - clean all build artifacts"
+	@echo "  test         - run test suite"
 	@echo ""
 	@echo "note: target platform determined by mach.toml (target = \"native\")"
 	@echo "  imach        - clean and build imach"
@@ -88,6 +87,9 @@ cmach-clean:
 cmach-build: $(CMACH)
 
 cmach: cmach-clean cmach-build
+
+test: cmach-build
+	@./out/bin/cmach test
 
 # intermediary compiler
 imach-clean:
@@ -120,23 +122,24 @@ $(BIN_DIR):
 $(CMACH_OBJ_DIR):
 	@mkdir -p $(CMACH_OBJ_DIR)
 
-$(CMACH_OBJ_DIR)/%.o: $(BOOT_DIR)/%.c $(BOOT_HEADERS) | $(CMACH_OBJ_DIR)
+$(CMACH_OBJ_DIR)/%.o: $(BOOT_SRC_DIR)/%.c $(BOOT_HEADERS) | $(CMACH_OBJ_DIR)
 	@echo "  cc  $<"
-	@$(CC) $(CFLAGS) $(LLVM_CFLAGS) -I$(BOOT_DIR) -c $< -o $@
+	@mkdir -p $(dir $@)
+	@$(CC) $(CFLAGS) -I$(BOOT_INC_DIR) -c $< -o $@
 
 # bootstrap compiler build
 $(CMACH): $(BOOT_OBJECTS) | $(BIN_DIR)
 	@echo "  ld  $@"
-	@$(CC) $(BOOT_OBJECTS) $(LLVM_LDFLAGS) -o $@
+	@$(CC) $(BOOT_OBJECTS) -o $@
 	@echo "bootstrap compiler ready: $@"
 
 # intermediary compiler build (using cmach)
 # mach.toml determines target and output paths
-$(IMACH): $(CMACH)
+$(IMACH): $(CMACH) | $(BIN_DIR)
 	@echo "  cleaning artifacts for imach build"
 	@rm -rf $(OUT_DIR)/imach
 	@echo "  cmach -> imach"
-	@$(CMACH) build .
+	@$(CMACH) build . -o $(IMACH)
 	@echo "intermediary compiler ready: $@"
 
 # final compiler build (using imach)
@@ -145,8 +148,5 @@ $(MACH): $(IMACH)
 	@echo "  cleaning artifacts for mach build"
 	@rm -rf $(OUT_DIR)/mach
 	@echo "  imach -> mach"
-	@echo ""
-	@echo "  NOTE: This stage of the pipeline is incomplete and included for scaffolding purposes"
-	@echo ""
 	@$(IMACH) build .
 	@echo "final compiler ready: $@"

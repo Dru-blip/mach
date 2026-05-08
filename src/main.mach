@@ -1,9 +1,12 @@
-use std.system.runtime;
-use std.types.string;
+use std.runtime;
 
-use mach.commands;
+use cli: mach.cli.main;
+
+# mach compiler entry point
+# ---
+# delegates to cli.run for command parsing and dispatch.
 
 $main.symbol = "main";
-fun main(args: []str) i64 {
-    ret dispatch(args);
+fun main(argc: i64, argv: &&u8) i64 {
+    ret cli.run(argc, argv);
 }
